@@ -1,9 +1,5 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-
-import * as vscode from 'vscode';
-
 import { bracePositions, insertOptions, managedSettings } from './constants';
+import { supportedFormatterRuleIds } from './supportedFormatterRules';
 
 const booleanOptions = ['true', 'false'] as const;
 const keepOnOneLineOptions = ['one_line_never', 'one_line_if_empty', 'one_line_if_single_item', 'one_line_always', 'one_line_preserve'] as const;
@@ -23,7 +19,6 @@ const compactParenthesesPositionOptions = [
 ] as const;
 const textBlockIndentationOptions = ['0', '1', '2', '3'] as const;
 const tabCharacterOptions = ['space', 'tab', 'mixed'] as const;
-const matrixRowPattern = /^\| (org\.eclipse\.jdt\.core\.formatter\.[^ ]+) \| ([^|]+) \|/;
 const alignmentWrapStyleByBits = new Map<number, AlignmentWrapStyle>([
 	[0, 'no_split'],
 	[16, 'compact'],
@@ -68,32 +63,16 @@ interface InputDescriptor {
 	alignmentState?: AlignmentRuleState;
 }
 
-export function loadFormatterRuleDefinitions(extensionUri: vscode.Uri): FormatterRuleDefinition[] {
-	const matrixPath = path.join(extensionUri.fsPath, 'formatter-rule-support-matrix.md');
-	const matrixText = fs.readFileSync(matrixPath, 'utf8');
-	return parseFormatterRuleSupportMatrix(matrixText);
-}
-
-export function parseFormatterRuleSupportMatrix(markdown: string): FormatterRuleDefinition[] {
-	const rules: FormatterRuleDefinition[] = [];
-
-	for (const line of markdown.split(/\r?\n/u)) {
-		const match = matrixRowPattern.exec(line);
-		if (!match) {
-			continue;
-		}
-
-		const id = match[1];
-		const family = match[2].trim();
-		rules.push({
+export function loadFormatterRuleDefinitions(_extensionUri?: unknown): FormatterRuleDefinition[] {
+	return supportedFormatterRuleIds.map((id) => {
+		const family = inferRuleFamily(id);
+		return {
 			id,
 			family,
 			familyLabel: humanizeTokenGroup(family),
 			label: humanizeTokenGroup(id.replace('org.eclipse.jdt.core.formatter.', '')),
-		});
-	}
-
-	return rules;
+		};
+	});
 }
 
 export function buildFormatterRuleEditorState(
@@ -393,4 +372,69 @@ function humanizeTokenGroup(value: string): string {
 
 function capitalizeToken(token: string): string {
 	return token.charAt(0).toUpperCase() + token.slice(1);
+}
+
+function inferRuleFamily(id: string): string {
+	const normalizedId = id.replace('org.eclipse.jdt.core.formatter.', '');
+
+	if (normalizedId.startsWith('comment.')) {
+		return 'comment';
+	}
+
+	if (normalizedId.startsWith('alignment_for_') || normalizedId.startsWith('align_')) {
+		return 'alignment';
+	}
+
+	if (normalizedId.startsWith('blank_lines_') || normalizedId.startsWith('number_of_blank_lines_')) {
+		return 'blank_lines';
+	}
+
+	if (normalizedId.startsWith('brace_position_for_')) {
+		return 'brace_position';
+	}
+
+	if (normalizedId.startsWith('parentheses_positions_')) {
+		return 'parentheses_positions';
+	}
+
+	if (normalizedId.startsWith('insert_space_')) {
+		return 'insert_space';
+	}
+
+	if (normalizedId.startsWith('insert_new_line_')) {
+		return 'insert_new_line';
+	}
+
+	if (normalizedId.startsWith('keep_') || normalizedId === 'format_guardian_clause_on_one_line') {
+		return 'keep_on_one_line';
+	}
+
+	if (normalizedId === 'disabling_tag' || normalizedId === 'enabling_tag' || normalizedId === 'use_on_off_tags') {
+		return 'on_off_tags';
+	}
+
+	if (
+		normalizedId === 'lineSplit'
+		|| normalizedId === 'text_block_indentation'
+		|| normalizedId.startsWith('continuation_indentation')
+		|| normalizedId.startsWith('indent')
+		|| normalizedId.startsWith('tabulation.')
+		|| normalizedId === 'use_tabs_only_for_leading_indentations'
+	) {
+		return 'indentation_and_wrapping';
+	}
+
+	if (normalizedId.startsWith('wrap_')) {
+		return 'wrapping';
+	}
+
+	if (normalizedId.startsWith('never_indent_')) {
+		return 'comment';
+	}
+
+	if (normalizedId === 'compact_else_if' || normalizedId === 'put_empty_statement_on_new_line') {
+		return 'control_statements';
+	}
+
+	return normalizedId.split(/[._]/u, 1)[0] ?? 'other';
 }

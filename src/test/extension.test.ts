@@ -154,7 +154,7 @@ suite('Extension Test Suite', () => {
 		assert.strictEqual(nextSummary.spaceBeforeBlockOpeningBrace, 'insert');
 	});
 
-	test('loads the full formatter rule catalog from the support matrix', () => {
+	test('loads the full formatter rule catalog from the generated TypeScript list', () => {
 		const extension = vscode.extensions.all.find((candidate) => candidate.packageJSON.name === 'eclipse-formatter-wizard');
 		assert.ok(extension, 'Expected the extension under test to be available.');
 
